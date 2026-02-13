@@ -1,0 +1,49 @@
+version: '3.8'  # You can remove this line (it's obsolete but harmless)
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: secure-api-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: securedb
+      MYSQL_USER: secureuser
+      MYSQL_PASSWORD: securepass
+    ports:
+      - "3307:3306"  # ← CHANGE THIS LINE (was "3306:3306")
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./app/db/migrate.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - secure-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: secure-api-app
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-supersecretkey12345}
+      - DATABASE_URL=mysql+pymysql://secureuser:securepass@db:3306/securedb
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - secure-network
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  mysql_data:
+
+networks:
+  secure-network:
+    driver: bridge
